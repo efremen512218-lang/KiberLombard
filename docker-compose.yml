@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cyberlombard
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: dev_password_change_in_prod
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://admin:dev_password_change_in_prod@postgres:5432/cyberlombard
+      REDIS_URL: redis://redis:6379
+      STEAM_API_KEY: ${STEAM_API_KEY}
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  steam-bot:
+    build: ./steam-bot
+    environment:
+      STEAM_USERNAME: ${STEAM_BOT_USERNAME}
+      STEAM_PASSWORD: ${STEAM_BOT_PASSWORD}
+      STEAM_SHARED_SECRET: ${STEAM_SHARED_SECRET}
+      STEAM_IDENTITY_SECRET: ${STEAM_IDENTITY_SECRET}
+      API_URL: http://backend:8000
+    depends_on:
+      - backend
+    volumes:
+      - ./steam-bot:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -1,0 +1,15 @@
+{
+  "name": "cyber-lombard-cs2",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "steam-bot"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\" \"npm run dev:bot\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && uvicorn main:app --reload --port 8000",
+    "dev:bot": "cd steam-bot && npm run dev"
+  }
+}

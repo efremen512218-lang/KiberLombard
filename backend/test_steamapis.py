@@ -1,0 +1,64 @@
+"""
+Тест получения реальных цен через SteamAPIs.com
+"""
+import asyncio
+from services.steamapis_prices import SteamAPIsPriceService
+
+
+async def test_steamapis():
+    """Тест SteamAPIs"""
+    
+    test_items = [
+        "AK-47 | Redline (Field-Tested)",
+        "AWP | Asiimov (Field-Tested)",
+        "M4A4 | Howl (Field-Tested)",
+        "Desert Eagle | Blaze (Factory New)",
+        "Glock-18 | Fade (Factory New)",
+        "Karambit | Doppler (Factory New)",
+        "M4A1-S | Hyper Beast (Field-Tested)",
+        "P250 | Asiimov (Field-Tested)",
+        "USP-S | Kill Confirmed (Minimal Wear)",
+        "AK-47 | Vulcan (Minimal Wear)",
+    ]
+    
+    print("=" * 80)
+    print("ТЕСТ STEAMAPIS.COM - РЕАЛЬНЫЕ ЦЕНЫ")
+    print("=" * 80)
+    print()
+    
+    # Получаем цены
+    prices = await SteamAPIsPriceService.get_prices(test_items)
+    
+    print()
+    print("=" * 80)
+    print("РЕЗУЛЬТАТЫ:")
+    print("=" * 80)
+    print()
+    
+    total = 0
+    for item in test_items:
+        price = prices.get(item, 0)
+        status = "✅" if price > 0 else "❌"
+        print(f"{status} {item}")
+        if price > 0:
+            print(f"   Цена: {price:,.2f} ₽")
+            total += price
+        else:
+            print(f"   Цена не найдена")
+        print()
+    
+    print("=" * 80)
+    print(f"Успешно загружено: {len([p for p in prices.values() if p > 0])} из {len(test_items)}")
+    print(f"Общая стоимость: {total:,.2f} ₽")
+    print("=" * 80)
+    print()
+    print("ПРИМЕЧАНИЕ:")
+    print("Если цены не загрузились, получите бесплатный API ключ:")
+    print("1. Зарегистрируйтесь на https://steamapis.com/")
+    print("2. Скопируйте API ключ из Dashboard")
+    print("3. Добавьте в .env: STEAMAPIS_KEY=ваш_ключ")
+    print("=" * 80)
+
+
+if __name__ == "__main__":
+    asyncio.run(test_steamapis())
