@@ -21,6 +21,7 @@ from services.contract_service import ContractService
 from services.payment_service import PaymentService
 from services.steam_auth_service import SteamAuthService
 from services.passport_ocr_service import PassportOCRService
+from services import telegram_service
 from config import get_settings
 from logger import logger
 from validators import (
@@ -745,6 +746,19 @@ async def create_deal(
         print(f"[API] Ошибка создания трейда: {e}")
         # Продолжаем без трейда - можно создать вручную
     
+    # Отправить уведомление в Telegram
+    try:
+        kyc = deal.kyc_snapshot or {}
+        await telegram_service.notify_new_deal(
+            deal_id=deal.id,
+            loan_amount=deal.loan_amount,
+            items_count=len(items_with_prices),
+            user_name=kyc.get("full_name", user.steam_username or "Клиент"),
+            phone=kyc.get("phone", "Не указан")
+        )
+    except Exception as e:
+        print(f"[API] Ошибка TG уведомления: {e}")
+    
     db.refresh(deal)
     return deal
 
@@ -865,6 +879,12 @@ async def accept_deal_trade(
     )
     db.add(audit_log)
     db.commit()
+    
+    # TG уведомление
+    try:
+        await telegram_service.notify_trade_accepted(deal.id, deal.loan_amount)
+    except Exception as e:
+        print(f"[API] TG error: {e}")
     
     return {
         "success": True,
@@ -1317,6 +1337,61 @@ async def notify_expiring_deals(db: Session = Depends(get_db)):
     }
 
 # ============= ADMIN ENDPOINTS =============
+
+@app.get("/api/admin/deals")
+async def get_all_deals_admin(db: Session = Depends(get_db)):
+    """Получить все сделки для админ-панели"""
+    
+    deals = db.query(models.Deal).order_by(models.Deal.created_at.desc()).all()
+    users = db.query(models.User).all()
+    
+    return {
+        "deals": [
+            {
+                "id": d.id,
+                "user_id": d.user_id,
+                "market_total": d.market_total,
+                "loan_amount": d.loan_amount,
+                "buyback_price": d.buyback_price,
+                "created_at": d.created_at.isoformat(),
+                "option_expiry": d.option_expiry.isoformat(),
+                "deal_status": d.deal_status.value if hasattr(d.deal_status, 'value') else str(d.deal_status),
+                "items_snapshot": d.items_snapshot,
+                "kyc_snapshot": d.kyc_snapshot,
+                "payout_transaction_id": d.payout_transaction_id,
+                "initial_trade_id": d.initial_trade_id
+            }
+            for d in deals
+        ],
+        "users": [
+            {
+                "id": u.id,
+                "steam_id": u.steam_id,
+                "steam_username": u.steam_username,
+                "phone": u.phone
+            }
+            for u in users
+        ]
+    }
+
+@app.post("/api/admin/deals/{deal_id}/cancel")
+async def cancel_deal_admin(
+    deal_id: int,
+    db: Session = Depends(get_db)
+):
+    """Отменить сделку (admin)"""
+    
+    deal = db.query(models.Deal).filter(models.Deal.id == deal_id).first()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Сделка не найдена")
+    
+    if deal.deal_status not in [models.DealStatus.PENDING]:
+        raise HTTPException(status_code=400, detail="Можно отменить только ожидающие сделки")
+    
+    deal.deal_status = models.DealStatus.CANCELLED
+    db.commit()
+    
+    return {"success": True, "message": "Сделка отменена"}
 
 @app.get("/api/admin/deals/pending")
 async def get_pending_deals(db: Session = Depends(get_db)):
